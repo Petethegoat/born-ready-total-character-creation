@@ -12,21 +12,11 @@ local chargenScript = "CharGen"
 
 local charGenerationMenu = require("Born Ready Total Character Creation.chargenMenu")
 
-charGenerationMenu.startGameCallback = function()
-	newGameType = type.custom
-	menu:destroy()
-	startNewGame(true)
-end
-
 --[[
 	wishlist:
 		disable tutorial messages via lua (without having to reimplement all the scripts maybe?)
 ]]
 
-local cgName
-local cgFemale
-local cgRace
-local cgClass
 local cgBirthsign
 
 local function setRandomEverything()
@@ -64,14 +54,8 @@ local function setupCharacter()
 	elseif newGameType == type.random or newGameType == type.quickstart then
 		setRandomEverything()
 	else
-		local player = tes3.getObject("player")
-		player.name = cgName
-		player.female = cgFemale
-		player.race = cgRace
-		player.head = player.female and player.race.femaleBody.head or player.race.maleBody.head
-		player.hair = player.female and player.race.femaleBody.hair or player.race.maleBody.hair
-		player.class = cgClass
-		-- birthsign happens after game start
+		-- Everything is set on the player object within the chargen menu...
+		-- Except birthsign, we get that back from the charMenu callback.
 	end
 end
 
@@ -248,3 +232,9 @@ event.register(tes3.event.uiActivated, updateMenu, { filter = "MenuOptions" })
 event.register(tes3.event.initialized, function()
 	mwse.overrideScript(chargenScript, executeChargen)
 end)
+
+charGenerationMenu.startGameCallback = function(birthsign)
+	newGameType = type.custom
+	cgBirthsign = birthsign
+	startNewGame(true)
+end

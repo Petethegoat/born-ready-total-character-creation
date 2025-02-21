@@ -3,7 +3,7 @@ local charGenerationMenu = {}
 charGenerationMenu.startGameCallback = {}
 
 --- @class tes3birthsign
-charGenerationMenu.cgBirthsign = nil
+local cgBirthsign = nil
 
 local attributeIcons = {
 	[0] = "strength",
@@ -19,9 +19,9 @@ local attributeDescStartingGMST = tes3.gmst.sStrDesc
 
 local backgroundsInterop = require("mer.characterBackgrounds.interop")
 local cgBackground = nil
+
 local cgHead = 1
 local cgHair = 1
-
 local lastRace = nil
 local lastSex = nil
 local heads = {}
@@ -43,10 +43,8 @@ local function GetHeadHairsForRace()
 		o.raceName == player.race.name and o.playable and player.female == o.female and not o.vampiric then
 			if o.part == tes3.partIndex.head then
 				table.insert(heads, o)
-				--mwse.log("head: " .. o.id)
 			elseif o.part == tes3.partIndex.hair then
 				table.insert(hairs, o)
-				--mwse.log("hair: " .. o.id)
 			end
 		end
 	end
@@ -125,6 +123,7 @@ local function createSpells(parent, spells, spellType, label, showEffects)
 			else
 				spell:register(tes3.uiEvent.help, function()
 					local help = tes3ui.createTooltipMenu()
+					help:getContentElement().childAlignX = 0
 					for i = 1, #s.effects do
 						local e = s.effects[i]
 						if e.id == -1 then break end
@@ -207,7 +206,7 @@ local function createReviewBlock(topBlock)
 	createStatLine(main, "Name", player.name, 0)
 	createStatLine(main, "Race", player.race.name, 0)
 	createStatLine(main, "Class", player.class.name, 0)
-	createStatLine(main, "Birthsign", CgBirthsign.name, 0)
+	createStatLine(main, "Birthsign", cgBirthsign.name, 0)
 	if backgroundsInterop and cgBackground then
 		createStatLine(main, "Background", cgBackground.name, 0)
 	end
@@ -233,9 +232,9 @@ local function createReviewBlock(topBlock)
 	createSpells(spells, player.race.abilities, tes3.spellType.ability, "Racial Abilities", false)
 	createSpells(spells, player.race.abilities, tes3.spellType.power, "Racial Powers", false)
 	createSpells(spells, player.race.abilities, tes3.spellType.spell, "Racial Spells", false)
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.ability, "Birthsign Abilities", false)
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.power, "Birthsign Powers", false)
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.spell, "Birthsign Spells", false)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.ability, "Birthsign Abilities", false)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.power, "Birthsign Powers", false)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.spell, "Birthsign Spells", false)
 
 	local skills = review:createThinBorder{ id = "skills" }
 	skills.widthProportional = 1
@@ -277,7 +276,7 @@ end
 
 --- @param tab tes3uiElement
 --- @param topBlock tes3uiElement
-local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
+local function createRaceTab(tab, topBlock, scrollOverride, headZ, headX)
 	local old = topBlock:findChild("race_content")
 	if old then old:destroy() end
 
@@ -305,7 +304,7 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 			local button = pane:createTextSelect{ id = "race_button:" .. r.id }
 			button:register(tes3.uiEvent.mouseClick, function()
 				player.race = r
-				createRaceTab(tab, topBlock, pane.widget.positionY, 180)
+				createRaceTab(tab, topBlock, pane.widget.positionY, 180, 45)
 				createReviewBlock(topBlock)
 			end)
 			button.text = r.name
@@ -324,17 +323,48 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 	subRight.borderLeft = 4
 	subRight.childAlignX = 0.5
 
+	local subRightTop = subRight:createBlock()
+	subRightTop.widthProportional = 1
+	subRightTop.autoHeight = true
+	subRightTop.childAlignX = 0.5
+
 	GetHeadHairsForRace()
 
-	local head = subRight:createThinBorder{ id = "race_head" }
+	local head = subRightTop:createThinBorder{ id = "race_head" }
 	head.width = 240
 	head.height = 240
 	head.paddingAllSides = 2
 	head.borderBottom = 2
+	head.borderRight = 2
+	head.consumeMouseEvents = true
 
-	local headRotate = subRight:createSlider{ current = headRotOverride, max = 360 }
-	headRotate.width = 240
-	headRotate.autoHeight = true
+	local headXRotate = subRightTop:createSliderVertical{ current = headX, max = 90 }
+	headXRotate.height = 240
+	headXRotate.autoWidth = true
+
+	local headZRotate = subRight:createSlider{ current = headZ, max = 360 }
+	headZRotate.width = 240
+	headZRotate.autoHeight = true
+	headZRotate.borderRight = 14
+
+	local mouseX, mouseY
+	head:register(tes3.uiEvent.mouseDown, function(e)
+		tes3ui.captureMouseDrag(true)
+		mouseX = e.relativeX
+		mouseY = e.relativeY
+	end)
+	head:register(tes3.uiEvent.mouseStillPressed, function(e)
+		headXRotate.widget.current = math.clamp(headXRotate.widget.current + e.relativeY - mouseY, 0, headXRotate.widget.max)
+		headZRotate.widget.current = (headZRotate.widget.current + e.relativeX - mouseX) % headZRotate.widget.max
+		headXRotate:triggerEvent(tes3.uiEvent.partScrollBarChanged)
+		headZRotate:triggerEvent(tes3.uiEvent.partScrollBarChanged)
+		headZRotate:getTopLevelMenu():updateLayout()
+		mouseX = e.relativeX
+		mouseY = e.relativeY
+	end)
+	head:register(tes3.uiEvent.mouseRelease, function(e)
+		tes3ui.captureMouseDrag(false)
+	end)
 
 	local buttonBlock = subRight:createBlock()
 	buttonBlock.autoWidth = true
@@ -344,19 +374,19 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 	local sex = buttonBlock:createButton{ text = "Sex" }
 	sex:register(tes3.uiEvent.mouseClick, function()
 		player.female = not player.female
-		createRaceTab(tab, topBlock, pane.widget.positionY, headRotate.widget.current)
+		createRaceTab(tab, topBlock, pane.widget.positionY, headZRotate.widget.current, headXRotate.widget.current)
 		createReviewBlock(topBlock)
 	end)
 	local nextHead = buttonBlock:createButton{ text = "Head " .. cgHead }
 	nextHead:register(tes3.uiEvent.mouseClick, function()
 		cgHead = math.max(1, (cgHead + 1) % #heads)
-		createRaceTab(tab, topBlock, pane.widget.positionY, headRotate.widget.current)
+		createRaceTab(tab, topBlock, pane.widget.positionY, headZRotate.widget.current, headXRotate.widget.current)
 		createReviewBlock(topBlock)
 	end)
 	local nextHair = buttonBlock:createButton{ text = "Hair " .. cgHair }
 	nextHair:register(tes3.uiEvent.mouseClick, function()
 		cgHair = math.max(1, (cgHair + 1) % #hairs)
-		createRaceTab(tab, topBlock, pane.widget.positionY, headRotate.widget.current)
+		createRaceTab(tab, topBlock, pane.widget.positionY, headZRotate.widget.current, headXRotate.widget.current)
 		createReviewBlock(topBlock)
 	end)
 
@@ -389,8 +419,11 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 	createSpells(spells, player.race.abilities, tes3.spellType.power, "Powers", false)
 	createSpells(spells, player.race.abilities, tes3.spellType.spell, "Spells", false)
 
-	local headPath = heads[cgHead].mesh --player.female and player.race.femaleBody.head.mesh or player.race.maleBody.head.mesh
-	local hairPath = hairs[cgHair].mesh --player.female and player.race.femaleBody.hair.mesh or player.race.maleBody.hair.mesh
+	local headPath = heads[cgHead].mesh
+	local hairPath = hairs[cgHair].mesh
+	player.head = heads[cgHead]
+	player.hair = hairs[cgHair]
+
 	local preview = head:createNif{ path = "pg_headref.nif" }
 	preview.absolutePosAlignX = 0.5
 	preview.absolutePosAlignY = 0.5
@@ -411,18 +444,13 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 	maxDimension = math.max(width, depth, height)
 	local targetHeight = 170
 	subNode.scale = targetHeight / maxDimension
-	stencil.scale = 2.36
+	stencil.scale = (head.width - (head.paddingAllSides * 2)) / 100
 
 	-- Attach hair after calculating the bounding box to get more consistent dimensions.
 	childNif = tes3.loadMesh(hairPath, false)
 	subNode:attachChild(childNif)
 
 	do --add properties
-		local vertexColorProperty = niVertexColorProperty.new()
-		vertexColorProperty.name = "vcol yo"
-		vertexColorProperty.source = 2
-		node:attachProperty(vertexColorProperty)
-
 		local zBufferProperty = niZBufferProperty.new()
 		zBufferProperty.name = "zbuf yo"
 		zBufferProperty:setFlag(true, 0)
@@ -430,36 +458,38 @@ local function createRaceTab(tab, topBlock, scrollOverride, headRotOverride)
 		node:attachProperty(zBufferProperty)
 	end
 
-	local matrix = tes3matrix33.new()
 	do --Apply rotation
-		matrix:toRotationZ(math.rad(180) + math.rad(-headRotOverride))
-		subNode.rotation = matrix
+		local matrix = tes3matrix33.new()
+		local matrix2 = tes3matrix33.new()
+		matrix:toRotationZ(math.rad(180) + math.rad(-headZ))
+		matrix2:toRotationX(math.rad(-headX + 45))
+		subNode.rotation = matrix * matrix2
 		local offset = -270
 		local lowestPoint = bb.min.z * subNode.scale
 		offset = offset - lowestPoint
 		subNode.translation.z = subNode.translation.z + offset + targetHeight
-		--subNode.translation.y = subNode.translation.y + offset
 		subNode:update()
 	end
 
-	local light = niPointLight.new()
-	light.translation = tes3vector3.new(0, -50, 0)
-	light.diffuse = niColor.new(0.8, 1, 0.4)
-	light.dimmer = 1
-	light.quadraticAttenuation = 2.619
-	light.constantAttenuation = 0.382
-	light:setRadius(25)
-	light:update()
-
-	--node:attachEffect(light)
 	node:updateEffects()
 	node:updateProperties()
 	node.appCulled = false
 	node:update()
 
-	headRotate:register(tes3.uiEvent.partScrollBarChanged, function(e)
-		matrix:toRotationZ(math.rad(180) + math.rad(-e.widget:getPropertyInt("PartScrollBar_current")))
-		subNode.rotation = matrix
+	headZRotate:register(tes3.uiEvent.partScrollBarChanged, function()
+		local matrix = tes3matrix33.new()
+		local matrix2 = tes3matrix33.new()
+		matrix:toRotationZ(math.rad(180) + math.rad(-headZRotate.widget.current))
+		matrix2:toRotationX(math.rad(-headXRotate.widget.current + 45))
+		subNode.rotation = matrix * matrix2
+		subNode:update()
+	end)
+	headXRotate:register(tes3.uiEvent.partScrollBarChanged, function()
+		local matrix = tes3matrix33.new()
+		local matrix2 = tes3matrix33.new()
+		matrix:toRotationZ(math.rad(180) + math.rad(-headZRotate.widget.current))
+		matrix2:toRotationX(math.rad(-headXRotate.widget.current + 45))
+		subNode.rotation = matrix * matrix2
 		subNode:update()
 	end)
 
@@ -614,12 +644,12 @@ local function createBirthsignTab(tab, topBlock, scrollOverride)
 		local birth = tes3.dataHandler.nonDynamicData.birthsigns[i]
 		local button = pane:createTextSelect{ id = "birth_button:" .. birth.id }
 		button:register(tes3.uiEvent.mouseClick, function()
-			CgBirthsign = birth
+			cgBirthsign = birth
 			createBirthsignTab(tab, topBlock, pane.widget.positionY)
 			createReviewBlock(topBlock)
 		end)
 		button.text = birth.name
-		if birth == CgBirthsign then
+		if birth == cgBirthsign then
 			button.widget.state = tes3.uiState.active
 		end
 	end
@@ -637,9 +667,9 @@ local function createBirthsignTab(tab, topBlock, scrollOverride)
 	border.autoHeight = true
 	border.autoWidth = true
 	border.paddingAllSides = 2
-	border:createImage{ id = "birth_image", path = "Textures\\" .. CgBirthsign.texturePath }
+	border:createImage{ id = "birth_image", path = "Textures\\" .. cgBirthsign.texturePath }
 
-	local desc = subRight:createLabel{ id = "birth_desc", text = CgBirthsign.description }
+	local desc = subRight:createLabel{ id = "birth_desc", text = cgBirthsign.description }
 	desc.wrapText = true
 	desc.autoHeight = true
 	desc.borderAllSides = 8
@@ -649,9 +679,9 @@ local function createBirthsignTab(tab, topBlock, scrollOverride)
 	spells.autoWidth = true
 	spells.autoHeight = true
 	spells.borderTop = 8
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.ability, "Abilities", true)
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.power, "Powers", true)
-	createSpells(spells, CgBirthsign.spells, tes3.spellType.spell, "Spells", true)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.ability, "Abilities", true)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.power, "Powers", true)
+	createSpells(spells, cgBirthsign.spells, tes3.spellType.spell, "Spells", true)
 
 	tab:updateLayout()
 end
@@ -688,7 +718,7 @@ local function createBackgroundTab(tab, topBlock, scrollOverride)
 			createReviewBlock(topBlock)
 		end)
 		button.text = background.name
-		if background == CgBirthsign then
+		if background == cgBackground then
 			button.widget.state = tes3.uiState.active
 		end
 	end
@@ -719,9 +749,11 @@ function charGenerationMenu.createChargenMenu(menuButtons)
 	tes3.fadeOut{ duration = 0.6 }
 	menuButtons.visible = false
 
-	if CgBirthsign == nil then
-		CgBirthsign = tes3.dataHandler.nonDynamicData.birthsigns[1]
+	if cgBirthsign == nil then
+		cgBirthsign = tes3.dataHandler.nonDynamicData.birthsigns[1]
 	end
+	local player = tes3.getObject("player")
+	player.name = "Player"
 
 	local menu = tes3ui.createMenu{ id = "menu_chargen", fixedFrame = true, modal = true }
 	menu.alpha = 1
@@ -740,7 +772,6 @@ function charGenerationMenu.createChargenMenu(menuButtons)
 		local tabs = topBlock:createTabContainer{ id = "tabs" }
 		tabs.heightProportional = 1
 		tabs.widthProportional = 1.1
-		-- Requires tabcontainer to raise this event on tab change (I've edited it)
 		tabs:register(tes3.uiEvent.valueChanged, function()
 			tes3ui.acquireTextInput(nil)
 		end)
@@ -750,7 +781,6 @@ function charGenerationMenu.createChargenMenu(menuButtons)
 
 		local name = tab:createTextInput{ placeholderText = "Input your name...", autoFocus = true, createBorder = true }
 		name:register(tes3.uiEvent.textUpdated, function(e)
-			local player = tes3.getObject("player")
 			player.name = e.widget.text
 			createReviewBlock(topBlock)
 		end)
@@ -762,16 +792,18 @@ function charGenerationMenu.createChargenMenu(menuButtons)
 		end)
 
 		tab = tabs.widget:addTab{ id = "race", name = "Race" }
-		createRaceTab(tab, topBlock, 0, 180)
+		createRaceTab(tab, topBlock, 0, 180, 45)
 		tab = tabs.widget:addTab{ id = "class", name = "Class" }
 		createClassTab(tab, topBlock, 0)
 		tab = tabs.widget:addTab{ id = "birth", name = "Birthsign" }
 		createBirthsignTab(tab, topBlock, 0)
 		-- Should actually do interop here. But I'm stupid.
+		--[[
 		if backgroundsInterop then
 			tab = tabs.widget:addTab{ id = "background", name = "Background" }
 			createBackgroundTab(tab, topBlock, 0)
 		end
+		]]
 	end
 
 	-- Review block
@@ -794,8 +826,8 @@ function charGenerationMenu.createChargenMenu(menuButtons)
 		local play = block:createButton{ text = "Play" }
 		play:register(tes3.uiEvent.mouseClick, function()
 			tes3.fadeIn{duration = 0.01}
-			charGenerationMenu.startGameCallback()
 			menu:destroy()
+			charGenerationMenu.startGameCallback(cgBirthsign)
 		end)
 	end
 
