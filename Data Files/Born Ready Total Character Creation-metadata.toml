@@ -1,0 +1,9 @@
+[package]
+name = "Premade Player Characters"
+homepage = "https://www.nexusmods.com/morrowind/mods/56045"
+repository = "https://github.com/Petethegoat/born-ready-total-character-creation"
+authors = ["Pete Goodfellow"]
+version = "0.1"
+
+[dependencies.mwse]
+buildnumber = 4304
